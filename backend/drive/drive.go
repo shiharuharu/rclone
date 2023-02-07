@@ -620,6 +620,7 @@ type Options struct {
 	Scope                     string               `config:"scope"`
 	RootFolderID              string               `config:"root_folder_id"`
 	ServiceAccountFile        string               `config:"service_account_file"`
+	ServiceAccountFilePath    string               `config:"service_account_file_path"`
 	ServiceAccountCredentials string               `config:"service_account_credentials"`
 	TeamDriveID               string               `config:"team_drive"`
 	AuthOwnerOnly             bool                 `config:"auth_owner_only"`
@@ -679,6 +680,11 @@ type Fs struct {
 	listRmu          *sync.Mutex         // protects listRempties
 	listRempties     map[string]struct{} // IDs of supposedly empty directories which triggered grouping disable
 	dirResourceKeys  *sync.Map           // map directory ID to resource key
+
+	ServiceAccountFiles      map[string]int
+	waitChangeServiceAccount sync.Mutex
+	FileObj                  *fs.Object
+	FileName                 string
 }
 
 type baseObject struct {
@@ -733,6 +739,45 @@ func (f *Fs) Features() *fs.Features {
 	return f.features
 }
 
+func (f *Fs) rateLimitChangeServiceAccount(ctx context.Context) (bool, error) {
+	if f.opt.ServiceAccountFilePath != "" && len(f.ServiceAccountFiles) == 0 {
+		f.ServiceAccountFiles = make(map[string]int)
+		dirList, err := os.ReadDir(f.opt.ServiceAccountFilePath)
+		if err != nil {
+			fs.Errorf(f, "Error: %v, Cannot read dir: %v", err.Error(), f.opt.ServiceAccountFilePath)
+			return false, err
+		}
+
+		for _, v := range dirList {
+			filePath := fmt.Sprintf("%s%s", f.opt.ServiceAccountFilePath, v.Name())
+			if ".json" == path.Ext(filePath) {
+				f.ServiceAccountFiles[filePath] = 0
+			}
+		}
+
+		if len(f.ServiceAccountFiles) == 0 {
+			fs.Errorf(f, "Error: No service account file found in: %v", f.opt.ServiceAccountFilePath)
+			return false, err
+		}
+	}
+
+	for k, v := range f.ServiceAccountFiles {
+		if v == 0 {
+			f.ServiceAccountFiles[k] = 1
+			err := f.changeServiceAccountFile(ctx, k)
+			if err != nil {
+				fs.Errorf(f, "Error: %v, Cannot change service account file: %v", err.Error(), k)
+				return false, err
+			}
+
+			return true, nil
+		}
+	}
+
+	fs.Errorf(f, "Error: No service account file available")
+	return false, nil
+}
+
 // shouldRetry determines whether a given err rates being retried
 func (f *Fs) shouldRetry(ctx context.Context, err error) (bool, error) {
 	if fserrors.ContextError(ctx, &err) {
@@ -753,6 +798,18 @@ func (f *Fs) shouldRetry(ctx context.Context, err error) (bool, error) {
 		if len(gerr.Errors) > 0 {
 			reason := gerr.Errors[0].Reason
 			if reason == "rateLimitExceeded" || reason == "userRateLimitExceeded" {
+				if f.opt.ServiceAccountFilePath != "" {
+					fs.Errorf(f, "Received upload limit error: %v", reason)
+
+					fs.Logf(f, "Waiting for service account change")
+					status, err := f.rateLimitChangeServiceAccount(ctx)
+					if status {
+						return true, err
+					} else {
+						fs.Errorf(f, "Cannot change service account file")
+						return false, err
+					}
+				}
 				if f.opt.StopOnUploadLimit && gerr.Errors[0].Message == "User rate limit exceeded." {
 					fs.Errorf(f, "Received upload limit error: %v", err)
 					return false, fserrors.FatalError(err)
