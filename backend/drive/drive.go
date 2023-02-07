@@ -741,7 +741,7 @@ func (f *Fs) Features() *fs.Features {
 }
 
 func (f *Fs) rateLimitChangeServiceAccount(ctx context.Context) (bool, error) {
-	_ = fmt.Sprintf("rateLimitChangeServiceAccount")
+	fs.Debugf(f, "rateLimitChangeServiceAccount")
 
 	if f.opt.ServiceAccountFilePath != "" && len(f.ServiceAccountFiles) == 0 {
 		f.ServiceAccountFiles = make(map[string]int)
@@ -768,11 +768,11 @@ func (f *Fs) rateLimitChangeServiceAccount(ctx context.Context) (bool, error) {
 		}
 	}
 
-	_ = fmt.Sprintf("ServiceAccountFiles count: %v", len(f.ServiceAccountFiles))
+	fs.Debugf(f, "ServiceAccountFiles count: %v", len(f.ServiceAccountFiles))
 
 	for k, v := range f.ServiceAccountFiles {
 		if v == 0 {
-			_ = fmt.Sprintf("changeServiceAccountFile: %v", k)
+			fs.Debugf(f, "changeServiceAccountFile: %v", k)
 
 			f.ServiceAccountFiles[k] = 1
 			err := f.changeServiceAccountFile(ctx, k)
@@ -1245,7 +1245,7 @@ func newFs(ctx context.Context, name, path string, m configmap.Mapper) (*Fs, err
 	// init service_account_file_path
 	if opt.ServiceAccountFile != "" {
 		opt.ServiceAccountFilePath = filepath.Dir(opt.ServiceAccountFile)
-		_ = fmt.Sprintf("service_account_file_path: %s", opt.ServiceAccountFilePath)
+		fs.Debugf(nil, "service_account_file_path: %s", opt.ServiceAccountFilePath)
 	}
 
 	err = checkUploadCutoff(opt.UploadCutoff)
