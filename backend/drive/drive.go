@@ -752,7 +752,7 @@ func (f *Fs) rateLimitChangeServiceAccount(ctx context.Context) (bool, error) {
 		}
 
 		for _, v := range dirList {
-			filePath := fmt.Sprintf("%s%s", f.opt.ServiceAccountFilePath, v.Name())
+			filePath := path.Join(f.opt.ServiceAccountFilePath, v.Name())
 			if f.opt.ServiceAccountFile != "" && filepath.Base(f.opt.ServiceAccountFile) == v.Name() {
 				continue
 			}
