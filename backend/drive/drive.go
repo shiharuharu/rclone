@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -750,6 +751,10 @@ func (f *Fs) rateLimitChangeServiceAccount(ctx context.Context) (bool, error) {
 
 		for _, v := range dirList {
 			filePath := fmt.Sprintf("%s%s", f.opt.ServiceAccountFilePath, v.Name())
+			if f.opt.ServiceAccountFile != "" && filepath.Base(f.opt.ServiceAccountFile) == v.Name() {
+				continue
+			}
+
 			if ".json" == path.Ext(filePath) {
 				f.ServiceAccountFiles[filePath] = 0
 			}
@@ -1230,6 +1235,12 @@ func newFs(ctx context.Context, name, path string, m configmap.Mapper) (*Fs, err
 	if err != nil {
 		return nil, err
 	}
+
+	// init service_account_file_path
+	if opt.ServiceAccountFile != "" {
+		opt.ServiceAccountFilePath = filepath.Dir(opt.ServiceAccountFile)
+	}
+
 	err = checkUploadCutoff(opt.UploadCutoff)
 	if err != nil {
 		return nil, fmt.Errorf("drive: upload cutoff: %w", err)
