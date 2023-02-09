@@ -744,6 +744,8 @@ func (f *Fs) rateLimitChangeServiceAccount(ctx context.Context) (bool, error) {
 	fs.Debugf(f, "rateLimitChangeServiceAccount")
 
 	if f.opt.ServiceAccountFilePath != "" && len(f.ServiceAccountFiles) == 0 {
+		fs.Debugf(f, "Refresh ServiceAccountFiles")
+
 		f.ServiceAccountFiles = make(map[string]int)
 		dirList, err := os.ReadDir(f.opt.ServiceAccountFilePath)
 		if err != nil {
@@ -775,6 +777,7 @@ func (f *Fs) rateLimitChangeServiceAccount(ctx context.Context) (bool, error) {
 			fs.Debugf(f, "changeServiceAccountFile: %v", k)
 
 			f.ServiceAccountFiles[k] = 1
+			delete(f.ServiceAccountFiles, k)
 			err := f.changeServiceAccountFile(ctx, k)
 			if err != nil {
 				fs.Errorf(f, "Error: %v, Cannot change service account file: %v", err.Error(), k)
